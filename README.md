@@ -1,2 +1,2 @@
 # rawy
-A minimal writing environment designed for distraction free writing.
+A minimal editor for focused writing.
