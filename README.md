@@ -69,3 +69,17 @@ Future possibilities:
 - Optional sync layer
 
 The UI is intentionally simple to ensure it runs smoothly on low-power hardware.
+
+## Development
+
+Install:
+
+```
+npm install
+```
+
+Then run:
+
+```
+npm run dev
+```
