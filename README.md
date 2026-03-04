@@ -20,7 +20,7 @@ Rawy is designed around a few core ideas:
   Less bells and whistles, more writing.
 
 - **Focus mode**  
-  Just write. No edits.
+  Just write. No edits. No navigation. Only forward.
   
 - **Structured writing projects**  
   Support organizing writing into projects, chapters, and notes.
