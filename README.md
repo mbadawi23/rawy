@@ -59,7 +59,6 @@ Current implementation uses:
 
 - **TypeScript**
 - **Vite**
-- **Vanilla JavaScript UI**
 - **HTML + CSS**
 - **WPE Webkit**
 
