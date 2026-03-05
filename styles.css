@@ -11,7 +11,7 @@ body {
   background: #f5f3ef;
   color: #1a1a1a;
 
-  font-family: "Georgia", "Times New Roman", serif;
+  font-family: "Ubuntu", "Georgia", "Times New Roman", serif;
 }
 
 
@@ -29,8 +29,8 @@ body {
   width: 220px;
   padding: 20px;
 
-  background: #1e1e1e;
-  color: #eaeaea;
+  background: #1a1a1a;
+  color: #f5f3ef;
 
   display: flex;
   flex-direction: column;
@@ -75,5 +75,5 @@ body {
   font-size: 22px;
   line-height: 1.6;
 
-  font-family: "Georgia", "Times New Roman", serif;
+  font-family: "Ubuntu", "Georgia", "Times New Roman", serif;
 }
