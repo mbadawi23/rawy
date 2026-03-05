@@ -1,15 +1,15 @@
 // src/schema.ts (suggested new file)
 
-export type UUID = string;
+export type ID = string;
 
 export type ISODateString = string; // new Date().toISOString()
 
 export interface Library {
   schemaVersion: 1;
-  libraryId: UUID;
+  libraryId: ID;
 
-  projects: Record<UUID, Project>;
-  documents: Record<UUID, Document>; // normalized for sync + fast lookup
+  projects: Record<ID, Project>;
+  documents: Record<ID, Document>; // normalized for sync + fast lookup
 
   app: AppState;
 
@@ -18,8 +18,8 @@ export interface Library {
 }
 
 export interface AppState {
-  activeProjectId: UUID | null;
-  activeNodeId: UUID | null; // points to a ProjectNode (doc or folder)
+  activeProjectId: ID | null;
+  activeNodeId: ID | null; // points to a ProjectNode (doc or folder)
   focusMode: boolean;
 
   // UI preferences (keep minimal in v1)
@@ -28,12 +28,12 @@ export interface AppState {
 }
 
 export interface Project {
-  projectId: UUID;
+  projectId: ID;
   title: string;
 
   // root of a tree. nodes live inside the project to keep it easy.
-  rootNodeId: UUID;
-  nodes: Record<UUID, ProjectNode>;
+  rootNodeId: ID;
+  nodes: Record<ID, ProjectNode>;
 
   // metadata
   createdAt: ISODateString;
@@ -43,8 +43,8 @@ export interface Project {
 export type ProjectNode = FolderNode | DocNode;
 
 export interface BaseNode {
-  nodeId: UUID;
-  parentId: UUID | null; // null for root
+  nodeId: ID;
+  parentId: ID | null; // null for root
   sortIndex: number; // sibling ordering
   title: string;
 
@@ -54,17 +54,17 @@ export interface BaseNode {
 
 export interface FolderNode extends BaseNode {
   kind: "folder";
-  childIds: UUID[]; // ordered list of children (folders or docs)
+  childIds: ID[]; // ordered list of children (folders or docs)
   isCollapsed?: boolean; // purely UI but convenient
 }
 
 export interface DocNode extends BaseNode {
   kind: "doc";
-  documentId: UUID; // points to Library.documents
+  documentId: ID; // points to Library.documents
 }
 
 export interface Document {
-  documentId: UUID;
+  documentId: ID;
 
   // content
   content: string; // v1: plain text/markdown
