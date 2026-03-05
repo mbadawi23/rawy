@@ -1,0 +1,79 @@
+/* --- Global reset --- */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+
+  background: #f5f3ef;
+  color: #1a1a1a;
+
+  font-family: "Georgia", "Times New Roman", serif;
+}
+
+
+/* --- Layout --- */
+
+#app {
+  display: flex;
+  height: 100vh;
+}
+
+
+/* --- Sidebar --- */
+
+#sidebar {
+  width: 220px;
+  padding: 20px;
+
+  background: #1e1e1e;
+  color: #eaeaea;
+
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+#sidebar h1 {
+  font-size: 18px;
+  font-weight: normal;
+  letter-spacing: 2px;
+}
+
+
+/* --- Editor area --- */
+
+#editor {
+  flex: 1;
+
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+
+  padding: 60px 20px;
+}
+
+
+/* --- Writing surface --- */
+
+#editor textarea {
+
+  width: 700px;
+  max-width: 90%;
+
+  height: 80vh;
+
+  border: none;
+  outline: none;
+  resize: none;
+
+  background: transparent;
+
+  font-size: 22px;
+  line-height: 1.6;
+
+  font-family: "Georgia", "Times New Roman", serif;
+}
