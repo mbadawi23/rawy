@@ -1,4 +1,8 @@
-import { Project, ProjectNode, ID } from "./schema";
+/**
+ * `libraryStore.ts`
+ */
+
+import { Project, ProjectNode, Document, ID } from "./schema";
 
 export interface LibraryStore {
   // Projects
