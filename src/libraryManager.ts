@@ -165,6 +165,24 @@ export class LibraryManager {
     return document;
   }
 
+  async selectFolder(nodeId: ID): Promise<void> {
+    const projectId = this.requireActiveProjectId();
+
+    const nodes = await this.store.listNodes(projectId);
+    const node = nodes.find((n) => n.id === nodeId);
+
+    if (!node) {
+      throw new Error(`Node not found: ${nodeId}`);
+    }
+
+    if (node.kind !== "folder") {
+      throw new Error(`Node is not a folder: ${nodeId}`);
+    }
+
+    this.state.activeNodeId = node.id;
+    this.state.activeDocumentId = null;
+  }
+
   /**
    * Returns the currently selected document, if any.
    */

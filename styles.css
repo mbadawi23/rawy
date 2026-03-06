@@ -72,6 +72,9 @@ body {
 }
 
 .sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 2px;
 }
 
@@ -118,4 +121,52 @@ body {
 
 .sidebar-doc-button {
   user-select: none;
+}
+
+.sidebar-folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-add-button {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.sidebar-add-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.sidebar-folder-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sidebar-folder-button {
+  flex: 1;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 6px 8px;
+  cursor: pointer;
+  font: inherit;
+  user-select: none;
+}
+
+.sidebar-folder-button.is-active {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+
+.sidebar-folder-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
 }
