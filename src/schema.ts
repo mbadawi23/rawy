@@ -84,7 +84,7 @@ export interface DocNode extends BaseNode {
 export interface Document extends BaseRecord {
   // content
   content: string; // v1: plain text/markdown
-  format: "markdown" | "plain";
+  format: "plain" | "markdown";
 
   // optional future hooks
   wordCount?: number;
