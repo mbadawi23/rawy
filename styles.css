@@ -34,15 +34,8 @@ body {
 
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 8px;
 }
-
-#sidebar h1 {
-  font-size: 18px;
-  font-weight: normal;
-  letter-spacing: 2px;
-}
-
 
 /* --- Editor area --- */
 
@@ -76,4 +69,53 @@ body {
   line-height: 1.6;
 
   font-family: "Ubuntu", "Georgia", "Times New Roman", serif;
+}
+
+.sidebar-header {
+  margin-bottom: 2px;
+}
+
+.sidebar-header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: normal;
+  letter-spacing: 2px;
+  user-select: none;
+}
+
+.sidebar-tree ul {
+  list-style: none;
+  padding-left: 2px;
+  margin: 0;
+}
+
+.sidebar-folder-label {
+  padding: 6px 8px;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.sidebar-doc-button {
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 6px 8px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.sidebar-doc-button.is-active {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+}
+
+.sidebar-doc-button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+}
+
+.sidebar-doc-button {
+  user-select: none;
 }
