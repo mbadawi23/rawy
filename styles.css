@@ -170,3 +170,20 @@ body {
   background: rgba(255, 255, 255, 0.06);
   border-radius: 6px;
 }
+
+/* Inline rename field inside the sidebar tree */
+.sidebar-rename-input {
+  width: 100%;
+  min-width: 0;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 6px;
+  padding: 4px 8px;
+  outline: none;
+}
+
+.sidebar-rename-input:focus {
+  border-color: rgba(255, 255, 255, 0.5);
+}

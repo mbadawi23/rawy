@@ -47,22 +47,27 @@ const sidebar = new Sidebar(sidebarRoot, {
   onAddToFolder: async (folderId, kind) => {
     console.log("[main] sidebar:onAddToFolder", { folderId, kind });
 
-    if (kind === null) return;
-
     if (kind === "folder") {
-      await manager.createFolder(folderId, "New Folder");
+      const folder = await manager.createFolder(folderId, "New Folder");
       await renderSidebar();
+      sidebar.startRename(folder.id);
       return;
     }
 
-    if (kind === "doc") {
-      const { document } = await manager.createDocument(
-        folderId,
-        "New Document",
-      );
-      editorInput.value = document.content;
-      await renderSidebar();
-    }
+    const { node, document } = await manager.createDocument(
+      folderId,
+      "New Document",
+    );
+    editorInput.value = document.content;
+    await renderSidebar();
+    sidebar.startRename(node.id);
+  },
+
+  onRenameNode: async (nodeId, title) => {
+    console.log("[main] sidebar:onRenameNode", { nodeId, title });
+
+    await manager.renameNode(nodeId, title);
+    await renderSidebar();
   },
 });
 
