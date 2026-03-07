@@ -44,22 +44,25 @@ const sidebar = new Sidebar(sidebarRoot, {
     await renderSidebar();
   },
 
-  onAddToFolder: async (folderId) => {
-    console.log("[main] sidebar:onAddToFolder", { folderId });
+  onAddToFolder: async (folderId, kind) => {
+    console.log("[main] sidebar:onAddToFolder", { folderId, kind });
 
-    const choice = window.prompt("Create 'doc' or 'folder'?", "doc");
+    if (kind === null) return;
 
-    if (choice === null) return;
-
-    if (choice.toLowerCase() === "folder") {
+    if (kind === "folder") {
       await manager.createFolder(folderId, "New Folder");
       await renderSidebar();
       return;
     }
 
-    const { document } = await manager.createDocument(folderId, "Untitled");
-    editorInput.value = document.content;
-    await renderSidebar();
+    if (kind === "doc") {
+      const { document } = await manager.createDocument(
+        folderId,
+        "New Document",
+      );
+      editorInput.value = document.content;
+      await renderSidebar();
+    }
   },
 });
 
