@@ -516,6 +516,157 @@ export class LibraryManager {
   }
 
   // ------------------------------------------------------------
+  // Delete
+  // ------------------------------------------------------------
+
+  /**
+   * Delete a document node or folder node.
+   *
+   * Rules for v1:
+   * - root folder cannot be deleted
+   * - deleting a folder deletes all descendants
+   * - deleting a doc also deletes its linked Document record
+   * - if the active selection is removed, selection falls back
+   *   to the deleted node's parent folder (or project root)
+   * - No trash bin logic yet. That's a v2 feature.
+   */
+  async deleteNode(nodeId: ID): Promise<void> {
+    console.log("[LibraryManager] deleteNode:start", { nodeId });
+
+    const projectId = this.requireActiveProjectId();
+    const project = await this.store.getProject(projectId);
+
+    if (!project) {
+      console.error("[LibraryManager] deleteNode:project-not-found", {
+        projectId,
+      });
+      throw new Error(`Project not found: ${projectId}`);
+    }
+
+    const nodes = await this.store.listNodes(projectId);
+    const node = nodes.find((n) => n.id === nodeId);
+
+    if (!node) {
+      console.error("[LibraryManager] deleteNode:node-not-found", { nodeId });
+      throw new Error(`Node not found: ${nodeId}`);
+    }
+
+    // Never allow deleting the project root folder.
+    if (node.id === project.rootNodeId) {
+      console.error("[LibraryManager] deleteNode:cannot-delete-root", {
+        nodeId,
+      });
+      throw new Error("Cannot delete the root folder");
+    }
+
+    const parentId = node.parentId;
+    if (!parentId) {
+      console.error("[LibraryManager] deleteNode:missing-parent", { nodeId });
+      throw new Error(`Node has no parent: ${nodeId}`);
+    }
+
+    const parent = nodes.find((n) => n.id === parentId);
+
+    if (!parent) {
+      console.error("[LibraryManager] deleteNode:parent-not-found", {
+        nodeId,
+        parentId,
+      });
+      throw new Error(`Parent node not found: ${parentId}`);
+    }
+
+    if (parent.kind !== "folder") {
+      console.error("[LibraryManager] deleteNode:parent-not-folder", {
+        nodeId,
+        parentId,
+        parentKind: parent.kind,
+      });
+      throw new Error(`Parent node is not a folder: ${parentId}`);
+    }
+
+    const now = isoNow();
+
+    // ------------------------------------------------------------
+    // Collect every node that must be removed.
+    // For a doc: just itself.
+    // For a folder: itself + all descendants.
+    // ------------------------------------------------------------
+    const nodesToDelete =
+      node.kind === "folder" ? collectDescendantNodes(nodes, node.id) : [node];
+
+    const nodeIdsToDelete = new Set(nodesToDelete.map((n) => n.id));
+
+    // Any doc nodes being deleted require their document records removed too.
+    const documentIdsToDelete = nodesToDelete
+      .filter((n): n is DocNode => n.kind === "doc")
+      .map((n) => n.documentId);
+
+    // ------------------------------------------------------------
+    // Remove the deleted node from its direct parent's childIds.
+    // ------------------------------------------------------------
+    const updatedParent: FolderNode = {
+      ...parent,
+      childIds: parent.childIds.filter((childId) => childId !== node.id),
+      updatedAt: now,
+    };
+
+    console.log("[LibraryManager] deleteNode:writing", {
+      nodeId,
+      deletedNodeCount: nodesToDelete.length,
+      deletedDocumentCount: documentIdsToDelete.length,
+      parentId: parent.id,
+    });
+
+    // Persist parent update first so tree references stay clean.
+    await this.store.putNode(updatedParent);
+
+    // Delete documents before deleting their nodes, mainly to keep
+    // debugging easier and the sequence easier to reason about.
+    for (const documentId of documentIdsToDelete) {
+      await this.store.deleteDocument(documentId);
+    }
+
+    for (const doomedNode of nodesToDelete) {
+      await this.store.deleteNode(doomedNode.id);
+    }
+
+    await this.store.putProject({
+      ...project,
+      updatedAt: now,
+    });
+
+    // ------------------------------------------------------------
+    // Repair selection if the active node/document was deleted.
+    // ------------------------------------------------------------
+    const activeNodeWasDeleted =
+      this.state.activeNodeId !== null &&
+      nodeIdsToDelete.has(this.state.activeNodeId);
+
+    const activeDocumentWasDeleted =
+      this.state.activeDocumentId !== null &&
+      documentIdsToDelete.includes(this.state.activeDocumentId);
+
+    if (activeNodeWasDeleted || activeDocumentWasDeleted) {
+      this.state.activeNodeId = parent.id;
+      this.state.activeDocumentId = null;
+    }
+
+    console.log("[LibraryManager] deleteNode:done", {
+      nodeId,
+      activeNodeId: this.state.activeNodeId,
+      activeDocumentId: this.state.activeDocumentId,
+    });
+  }
+
+  async getActiveDocument(): Promise<Document | null> {
+    if (!this.state.activeDocumentId) {
+      return null;
+    }
+
+    return this.store.getDocument(this.state.activeDocumentId);
+  }
+
+  // ------------------------------------------------------------
   // Internal helpers
   // ------------------------------------------------------------
 
@@ -534,6 +685,48 @@ export class LibraryManager {
 
     return this.state.activeDocumentId;
   }
+}
+
+/**
+ * Collect a folder node and all of its descendants.
+ *
+ * Returned order is children-first for folders, which is convenient
+ * when deleting nested trees.
+ */
+function collectDescendantNodes(
+  nodes: ProjectNode[],
+  rootNodeId: ID,
+): ProjectNode[] {
+  const childrenByParentId = new Map<ID, ProjectNode[]>();
+
+  for (const node of nodes) {
+    if (!node.parentId) continue;
+
+    const siblings = childrenByParentId.get(node.parentId) ?? [];
+    siblings.push(node);
+    childrenByParentId.set(node.parentId, siblings);
+  }
+
+  const root = nodes.find((node) => node.id === rootNodeId);
+  if (!root) {
+    throw new Error(`Node not found: ${rootNodeId}`);
+  }
+
+  const result: ProjectNode[] = [];
+
+  function visit(node: ProjectNode): void {
+    const children = childrenByParentId.get(node.id) ?? [];
+
+    for (const child of children) {
+      visit(child);
+    }
+
+    result.push(node);
+  }
+
+  visit(root);
+
+  return result;
 }
 
 function countWords(text: string): number {

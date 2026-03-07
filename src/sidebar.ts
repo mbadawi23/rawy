@@ -23,6 +23,7 @@ export interface SidebarCallbacks {
   onSelectFolder: (folderId: ID) => void;
   onAddToFolder: (folderId: ID, kind: "doc" | "folder") => void;
   onRenameNode: (nodeId: ID, title: string) => void | Promise<void>;
+  onDeleteNode: (nodeId: ID, kind: "doc" | "folder", title: string) => void;
 }
 
 /**
@@ -324,6 +325,30 @@ export class Sidebar {
         await this.commitRename(nodeId, input.value);
       });
     }
+
+    // ------------------------------------------------------------
+    // Delete node
+    // ------------------------------------------------------------
+    const deleteButtons = this.root.querySelectorAll<HTMLElement>(
+      "[data-delete-node-id]",
+    );
+
+    for (const button of deleteButtons) {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+
+        const nodeId = button.dataset.deleteNodeId;
+        const kind = button.dataset.deleteNodeKind as
+          | "doc"
+          | "folder"
+          | undefined;
+        const title = button.dataset.deleteNodeTitle;
+
+        if (!nodeId || !kind || !title) return;
+
+        this.callbacks.onDeleteNode(nodeId, kind, title);
+      });
+    }
   }
 }
 
@@ -359,6 +384,11 @@ function renderTree(
           ? renderAddControl(node.id, node.title, isMenuOpen)
           : "";
 
+        const deleteControl =
+          node.id === activeNodeId
+            ? renderDeleteButton(node.id, "folder", node.title)
+            : "";
+
         const folderLabel = isEditing
           ? renderRenameInput(node.id, node.title, "folder")
           : `
@@ -375,7 +405,11 @@ function renderTree(
           <li class="sidebar-folder">
             <div class="sidebar-folder-row">
               ${folderLabel}
-              ${addControl}
+              
+              <div class="sidebar-row-actions">
+                ${addControl}
+                ${deleteControl}
+              </div>
             </div>
 
             <ul class="sidebar-children">
@@ -406,9 +440,20 @@ function renderTree(
             </button>
           `;
 
+      const deleteControl =
+        node.id === activeNodeId
+          ? renderDeleteButton(node.id, "doc", node.title)
+          : "";
+
       return `
         <li class="sidebar-doc">
-          ${docLabel}
+          <div class="sidebar-doc-row">
+            ${docLabel}
+
+            <div class="sidebar-row-actions">
+              ${deleteControl}
+            </div>
+          </div>
         </li>
       `;
     })
@@ -486,6 +531,32 @@ function renderRenameInput(
       data-rename-input-node-id="${nodeId}"
       aria-label="Rename ${kind}"
     />
+  `;
+}
+
+/**
+ * Render the delete button for the active node.
+ *
+ * We only show this on the currently active item to keep
+ * the sidebar from getting too cluttered.
+ */
+function renderDeleteButton(
+  nodeId: ID,
+  kind: "doc" | "folder",
+  title: string,
+): string {
+  return `
+    <button
+      class="sidebar-delete-button"
+      type="button"
+      data-delete-node-id="${nodeId}"
+      data-delete-node-kind="${kind}"
+      data-delete-node-title="${escapeHtmlAttribute(title)}"
+      aria-label="Delete ${escapeHtml(title)}"
+      title="Delete"
+    >
+      🗑
+    </button>
   `;
 }
 

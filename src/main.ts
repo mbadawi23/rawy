@@ -69,6 +69,27 @@ const sidebar = new Sidebar(sidebarRoot, {
     await manager.renameNode(nodeId, title);
     await renderSidebar();
   },
+
+  onDeleteNode: async (nodeId, kind, title) => {
+    console.log("[main] sidebar:onDeleteNode", { nodeId, kind, title });
+
+    const confirmed =
+      kind === "folder"
+        ? window.confirm(`Delete folder "${title}" and all its contents?`)
+        : window.confirm(`Delete document "${title}"?`);
+
+    if (!confirmed) return;
+
+    await manager.deleteNode(nodeId);
+
+    // After deletion the manager already fixed the selection.
+    // Ask it which document (if any) is now active.
+    const activeDocument = await manager.getActiveDocument();
+
+    editorInput.value = activeDocument?.content ?? "";
+
+    await renderSidebar();
+  },
 });
 
 async function bootstrap(): Promise<void> {
