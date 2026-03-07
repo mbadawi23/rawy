@@ -62,7 +62,10 @@ export class Sidebar {
   constructor(
     private readonly root: HTMLElement,
     private readonly callbacks: SidebarCallbacks,
-  ) {}
+  ) {
+    // Allow the sidebar container to receive keyboard focus.
+    this.root.tabIndex = 0;
+  }
 
   /**
    * Public entrypoint for inline rename mode.
@@ -124,7 +127,14 @@ export class Sidebar {
 
     this.bindEvents();
     this.bindRenameInputEvents();
-    this.focusRenameInput();
+
+    // If we are renaming, focus the input.
+    // Otherwise keep keyboard focus on the sidebar itself.
+    if (this.editingNodeId) {
+      this.focusRenameInput();
+    } else {
+      this.focusSidebarRoot();
+    }
   }
 
   /**
@@ -150,6 +160,13 @@ export class Sidebar {
 
     input.focus();
     input.select();
+  }
+
+  /**
+   * Keep keyboard navigation attached to the sidebar root.
+   */
+  private focusSidebarRoot(): void {
+    this.root.focus();
   }
 
   /**
@@ -193,6 +210,7 @@ export class Sidebar {
 
     this.root.addEventListener("click", this.handleRootClick);
     this.root.addEventListener("dblclick", this.handleRootDoubleClick);
+    this.root.addEventListener("keydown", this.handleRootKeyDown);
   }
 
   /**
@@ -331,6 +349,109 @@ export class Sidebar {
       this.startRename(folderId);
     }
   };
+
+  /**
+   * Handle sidebar keyboard navigation.
+   *
+   * Supported for now:
+   * - ArrowUp / ArrowDown -> move selection through visible nodes
+   * - Enter -> activate selected node
+   *
+   * We intentionally ignore key handling while the inline rename input
+   * is focused so typing/editing remains natural.
+   */
+  private handleRootKeyDown = (event: KeyboardEvent): void => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    // Do not hijack keys while editing a rename field.
+    if (target.matches("[data-rename-input-node-id]")) {
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      this.moveSelection(-1);
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      this.moveSelection(1);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      this.activateSelectedNode();
+    }
+  };
+
+  /**
+   * Move selection up or down through the currently visible nodes.
+   */
+  private moveSelection(delta: -1 | 1): void {
+    if (!this.lastRenderData) return;
+
+    const visibleNodes = getVisibleNodes(
+      this.lastRenderData.nodes,
+      this.lastRenderData.project.rootNodeId,
+    );
+
+    if (visibleNodes.length === 0) return;
+
+    const currentIndex = visibleNodes.findIndex(
+      (node) => node.id === this.lastRenderData?.activeNodeId,
+    );
+
+    // If nothing is selected yet, choose the first/last visible node
+    // depending on navigation direction.
+    if (currentIndex === -1) {
+      const fallbackNode =
+        delta > 0 ? visibleNodes[0] : visibleNodes[visibleNodes.length - 1];
+
+      this.selectNodeByKind(fallbackNode);
+      return;
+    }
+
+    const nextIndex = clamp(currentIndex + delta, 0, visibleNodes.length - 1);
+
+    const nextNode = visibleNodes[nextIndex];
+    if (!nextNode) return;
+
+    this.selectNodeByKind(nextNode);
+  }
+
+  /**
+   * Activate the currently selected node.
+   *
+   * For now, activation simply routes through the same selection callbacks.
+   * This keeps keyboard behavior aligned with click behavior.
+   */
+  private activateSelectedNode(): void {
+    if (!this.lastRenderData) return;
+    if (!this.lastRenderData.activeNodeId) return;
+
+    const node = this.lastRenderData.nodes.find(
+      (item) => item.id === this.lastRenderData?.activeNodeId,
+    );
+
+    if (!node) return;
+
+    this.selectNodeByKind(node);
+  }
+
+  /**
+   * Route a node through the correct selection callback.
+   */
+  private selectNodeByKind(node: ProjectNode): void {
+    if (node.kind === "doc") {
+      this.callbacks.onSelectDocument(node.id);
+      return;
+    }
+
+    this.callbacks.onSelectFolder(node.id);
+  }
 
   /**
    * Rename inputs are recreated on each render, so their listeners
@@ -632,4 +753,52 @@ function getActionFolderId(
   }
 
   return activeNode.parentId ?? rootNodeId;
+}
+
+/**
+ * Return visible nodes in the same order they appear in the sidebar.
+ *
+ * For now this is a simple depth-first traversal of the full tree.
+ * Later, if folder collapse is implemented, this helper is where
+ * collapsed branches should be skipped.
+ */
+function getVisibleNodes(nodes: ProjectNode[], rootNodeId: ID): ProjectNode[] {
+  const childrenByParentId = new Map<ID, ProjectNode[]>();
+
+  for (const node of nodes) {
+    if (!node.parentId) continue;
+
+    const siblings = childrenByParentId.get(node.parentId) ?? [];
+    siblings.push(node);
+    childrenByParentId.set(node.parentId, siblings);
+  }
+
+  for (const siblings of childrenByParentId.values()) {
+    siblings.sort((a, b) => a.sortIndex - b.sortIndex);
+  }
+
+  const result: ProjectNode[] = [];
+
+  function visit(folderId: ID): void {
+    const children = childrenByParentId.get(folderId) ?? [];
+
+    for (const child of children) {
+      result.push(child);
+
+      if (child.kind === "folder") {
+        visit(child.id);
+      }
+    }
+  }
+
+  visit(rootNodeId);
+
+  return result;
+}
+
+/**
+ * Clamp a numeric value into an inclusive range.
+ */
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
 }

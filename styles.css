@@ -230,3 +230,12 @@ body {
   gap: 6px;
   flex-shrink: 0;
 }
+
+#sidebar:focus {
+  outline: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+#sidebar:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.35);
+  outline-offset: -3px;
+}
