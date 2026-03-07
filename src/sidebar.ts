@@ -54,6 +54,11 @@ export class Sidebar {
    */
   private lastRenderData: SidebarRenderData | null = null;
 
+  /**
+   * Root-level delegated listeners only need to be attached once.
+   */
+  private eventsBound = false;
+
   constructor(
     private readonly root: HTMLElement,
     private readonly callbacks: SidebarCallbacks,
@@ -68,7 +73,6 @@ export class Sidebar {
   startRename(nodeId: ID): void {
     this.editingNodeId = nodeId;
     this.rerender();
-    this.focusRenameInput();
   }
 
   /**
@@ -119,6 +123,7 @@ export class Sidebar {
     `;
 
     this.bindEvents();
+    this.bindRenameInputEvents();
     this.focusRenameInput();
   }
 
@@ -174,124 +179,164 @@ export class Sidebar {
   }
 
   /**
-   * Attach event listeners to newly rendered DOM elements.
+   * Attach delegated event listeners to the sidebar root.
    *
-   * Because the sidebar is re-rendered completely, listeners must
-   * be rebound every time render() runs.
+   * These only need to be bound once because they rely on event bubbling
+   * from elements rendered inside the sidebar.
    */
   private bindEvents(): void {
+    if (this.eventsBound) {
+      return;
+    }
+
+    this.eventsBound = true;
+
+    this.root.addEventListener("click", this.handleRootClick);
+    this.root.addEventListener("dblclick", this.handleRootDoubleClick);
+  }
+
+  /**
+   * Handle all click interactions through event delegation.
+   */
+  private handleRootClick = (event: MouseEvent): void => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
     // ------------------------------------------------------------
-    // Document selection
+    // Delete node
     // ------------------------------------------------------------
-    const docButtons =
-      this.root.querySelectorAll<HTMLElement>("[data-node-id]");
+    const deleteButton = target.closest<HTMLElement>("[data-delete-node-id]");
+    if (deleteButton) {
+      event.stopPropagation();
 
-    for (const button of docButtons) {
-      button.addEventListener("click", () => {
-        const nodeId = button.dataset.nodeId;
-        if (!nodeId) return;
+      const nodeId = deleteButton.dataset.deleteNodeId;
+      const kind = deleteButton.dataset.deleteNodeKind as
+        | "doc"
+        | "folder"
+        | undefined;
+      const title = deleteButton.dataset.deleteNodeTitle;
 
-        this.callbacks.onSelectDocument(nodeId);
-      });
+      if (!nodeId || !kind || !title) return;
 
-      // Double click starts inline rename for docs.
-      button.addEventListener("dblclick", (event) => {
-        event.preventDefault();
-
-        const nodeId = button.dataset.nodeId;
-        if (!nodeId) return;
-
-        this.startRename(nodeId);
-      });
+      this.callbacks.onDeleteNode(nodeId, kind, title);
+      return;
     }
 
     // ------------------------------------------------------------
-    // Folder selection
+    // Toggle "+" add menu
     // ------------------------------------------------------------
-    const folderButtons = this.root.querySelectorAll<HTMLElement>(
-      "[data-folder-node-id]",
-    );
-
-    for (const button of folderButtons) {
-      button.addEventListener("click", () => {
-        const folderId = button.dataset.folderNodeId;
-        if (!folderId) return;
-
-        this.callbacks.onSelectFolder(folderId);
-      });
-
-      // Double click starts inline rename for folders.
-      button.addEventListener("dblclick", (event) => {
-        event.preventDefault();
-
-        const folderId = button.dataset.folderNodeId;
-        if (!folderId) return;
-
-        this.startRename(folderId);
-      });
-    }
-
-    // ------------------------------------------------------------
-    // "+" add-menu toggle
-    // ------------------------------------------------------------
-    const addToggleButtons = this.root.querySelectorAll<HTMLElement>(
+    const addToggleButton = target.closest<HTMLElement>(
       "[data-add-toggle-folder-id]",
     );
+    if (addToggleButton) {
+      event.stopPropagation();
 
-    for (const button of addToggleButtons) {
-      button.addEventListener("click", (event) => {
-        event.stopPropagation();
+      const folderId = addToggleButton.dataset.addToggleFolderId;
+      if (!folderId) return;
 
-        const folderId = button.dataset.addToggleFolderId;
-        if (!folderId) return;
+      this.addMenuFolderId =
+        this.addMenuFolderId === folderId ? null : folderId;
 
-        // Toggle menu open/closed
-        this.addMenuFolderId =
-          this.addMenuFolderId === folderId ? null : folderId;
-
-        this.rerender();
-      });
+      this.rerender();
+      return;
     }
 
     // ------------------------------------------------------------
-    // Create new document or folder
+    // Create doc/folder from inline add menu
     // ------------------------------------------------------------
-    const createButtons = this.root.querySelectorAll<HTMLElement>(
+    const createButton = target.closest<HTMLElement>(
       "[data-create-in-folder-id]",
     );
+    if (createButton) {
+      event.stopPropagation();
 
-    for (const button of createButtons) {
-      button.addEventListener("click", (event) => {
-        event.stopPropagation();
+      const folderId = createButton.dataset.createInFolderId;
+      const kind = createButton.dataset.createKind as
+        | "doc"
+        | "folder"
+        | undefined;
 
-        const folderId = button.dataset.createInFolderId;
-        const kind = button.dataset.createKind as "doc" | "folder" | undefined;
+      if (!folderId || !kind) return;
 
-        if (!folderId || !kind) return;
-
-        this.addMenuFolderId = null;
-        this.callbacks.onAddToFolder(folderId, kind);
-      });
+      this.addMenuFolderId = null;
+      this.callbacks.onAddToFolder(folderId, kind);
+      return;
     }
 
     // ------------------------------------------------------------
-    // Close add menu
+    // Close inline add menu
     // ------------------------------------------------------------
-    const cancelButtons = this.root.querySelectorAll<HTMLElement>(
+    const cancelAddButton = target.closest<HTMLElement>(
       "[data-cancel-add-menu]",
     );
+    if (cancelAddButton) {
+      event.stopPropagation();
 
-    for (const button of cancelButtons) {
-      button.addEventListener("click", (event) => {
-        event.stopPropagation();
-        this.addMenuFolderId = null;
-        this.rerender();
-      });
+      this.addMenuFolderId = null;
+      this.rerender();
+      return;
     }
 
     // ------------------------------------------------------------
-    // Inline rename
+    // Select document
     // ------------------------------------------------------------
+    const docButton = target.closest<HTMLElement>("[data-node-id]");
+    if (docButton) {
+      const nodeId = docButton.dataset.nodeId;
+      if (!nodeId) return;
+
+      this.callbacks.onSelectDocument(nodeId);
+      return;
+    }
+
+    // ------------------------------------------------------------
+    // Select folder
+    // ------------------------------------------------------------
+    const folderButton = target.closest<HTMLElement>("[data-folder-node-id]");
+    if (folderButton) {
+      const folderId = folderButton.dataset.folderNodeId;
+      if (!folderId) return;
+
+      this.callbacks.onSelectFolder(folderId);
+    }
+  };
+
+  /**
+   * Handle double-click interactions through event delegation.
+   *
+   * Double-clicking a doc or folder enters inline rename mode.
+   */
+  private handleRootDoubleClick = (event: MouseEvent): void => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+
+    const docButton = target.closest<HTMLElement>("[data-node-id]");
+    if (docButton) {
+      event.preventDefault();
+
+      const nodeId = docButton.dataset.nodeId;
+      if (!nodeId) return;
+
+      this.startRename(nodeId);
+      return;
+    }
+
+    const folderButton = target.closest<HTMLElement>("[data-folder-node-id]");
+    if (folderButton) {
+      event.preventDefault();
+
+      const folderId = folderButton.dataset.folderNodeId;
+      if (!folderId) return;
+
+      this.startRename(folderId);
+    }
+  };
+
+  /**
+   * Rename inputs are recreated on each render, so their listeners
+   * still need to be rebound after every render.
+   */
+  private bindRenameInputEvents(): void {
     const renameInputs = this.root.querySelectorAll<HTMLInputElement>(
       "[data-rename-input-node-id]",
     );
@@ -318,35 +363,11 @@ export class Sidebar {
         }
       });
 
-      // Clicking outside saves, unless already handled above.
+      // Clicking away saves, unless Enter/Escape already handled it.
       input.addEventListener("blur", async () => {
         if (didSubmit) return;
         didSubmit = true;
         await this.commitRename(nodeId, input.value);
-      });
-    }
-
-    // ------------------------------------------------------------
-    // Delete node
-    // ------------------------------------------------------------
-    const deleteButtons = this.root.querySelectorAll<HTMLElement>(
-      "[data-delete-node-id]",
-    );
-
-    for (const button of deleteButtons) {
-      button.addEventListener("click", (event) => {
-        event.stopPropagation();
-
-        const nodeId = button.dataset.deleteNodeId;
-        const kind = button.dataset.deleteNodeKind as
-          | "doc"
-          | "folder"
-          | undefined;
-        const title = button.dataset.deleteNodeTitle;
-
-        if (!nodeId || !kind || !title) return;
-
-        this.callbacks.onDeleteNode(nodeId, kind, title);
       });
     }
   }
@@ -402,10 +423,12 @@ function renderTree(
             `;
 
         return `
-          <li class="sidebar-folder">
-            <div class="sidebar-folder-row">
-              ${folderLabel}
-              
+          <li class="sidebar-node sidebar-node-folder">
+            <div class="sidebar-node-row">
+              <div class="sidebar-node-main">
+                ${folderLabel}
+              </div>
+
               <div class="sidebar-row-actions">
                 ${addControl}
                 ${deleteControl}
@@ -446,9 +469,11 @@ function renderTree(
           : "";
 
       return `
-        <li class="sidebar-doc">
-          <div class="sidebar-doc-row">
-            ${docLabel}
+        <li class="sidebar-node sidebar-node-doc">
+          <div class="sidebar-node-row">
+            <div class="sidebar-node-main">
+              ${docLabel}
+            </div>
 
             <div class="sidebar-row-actions">
               ${deleteControl}

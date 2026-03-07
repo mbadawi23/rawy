@@ -211,3 +211,22 @@ body {
   align-items: center;
   gap: 6px;
 }
+
+.sidebar-node-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.sidebar-node-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.sidebar-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
