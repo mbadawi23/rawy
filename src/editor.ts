@@ -6,6 +6,8 @@ export class Editor {
   private readonly emptyPlaceholder = "Open a document to write...";
   private readonly documentPlaceholder = "Write on...";
 
+  private saveTimer: number | null = null;
+
   constructor(
     private readonly input: HTMLTextAreaElement,
     private readonly manager: LibraryManager,
@@ -17,6 +19,11 @@ export class Editor {
 
   destroy(): void {
     this.input.removeEventListener("input", this.handleInput);
+
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
   }
 
   async refreshFromSelection(): Promise<void> {
@@ -52,13 +59,20 @@ export class Editor {
     }
   }
 
-  private handleInput = async (): Promise<void> => {
+  private handleInput = (): void => {
     const state = this.manager.getState();
 
     if (!state.activeDocumentId) {
       return;
     }
 
-    await this.manager.saveSelectedDocument(this.input.value);
+    // reset debounce timer
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+    }
+
+    this.saveTimer = window.setTimeout(async () => {
+      await this.manager.saveSelectedDocument(this.input.value);
+    }, 1000);
   };
 }
