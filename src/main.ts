@@ -3,6 +3,7 @@
 import { IndexedDbLibraryStore } from "./stores/indexedDbLibraryStore";
 import { LibraryManager } from "./libraryManager";
 import { Sidebar } from "./sidebar";
+import { Editor } from "./editor";
 
 const app = document.getElementById("app");
 
@@ -13,7 +14,7 @@ if (!app) {
 app.innerHTML = `
   <aside id="sidebar"></aside>
   <main id="editor">
-    <textarea id="editor-input" placeholder="Start writing..."></textarea>
+    <textarea id="editor-input" placeholder="Write on..."></textarea>
   </main>
 `;
 
@@ -24,13 +25,14 @@ const editorInput = document.getElementById(
 
 const store = new IndexedDbLibraryStore();
 const manager = new LibraryManager(store);
+const editor = new Editor(editorInput, manager);
 
 const sidebar = new Sidebar(sidebarRoot, {
   onSelectDocument: async (nodeId) => {
     console.log("[main] sidebar:onSelectDocument", { nodeId });
 
-    const document = await manager.selectDocument(nodeId);
-    editorInput.value = document?.content ?? "";
+    await manager.selectDocument(nodeId);
+    await editor.refreshFromSelection();
 
     await renderSidebar();
   },
@@ -39,7 +41,7 @@ const sidebar = new Sidebar(sidebarRoot, {
     console.log("[main] sidebar:onSelectFolder", { folderId });
 
     await manager.selectFolder(folderId);
-    editorInput.value = "";
+    await editor.refreshFromSelection();
 
     await renderSidebar();
   },
@@ -58,8 +60,11 @@ const sidebar = new Sidebar(sidebarRoot, {
       folderId,
       "New Document",
     );
-    editorInput.value = document.content;
+
+    editor.setDocumentContent(document.content);
+
     await renderSidebar();
+    editor.focus();
     sidebar.startRename(node.id);
   },
 
@@ -81,12 +86,7 @@ const sidebar = new Sidebar(sidebarRoot, {
     if (!confirmed) return;
 
     await manager.deleteNode(nodeId);
-
-    // After deletion the manager already fixed the selection.
-    // Ask it which document (if any) is now active.
-    const activeDocument = await manager.getActiveDocument();
-
-    editorInput.value = activeDocument?.content ?? "";
+    await editor.refreshFromSelection();
 
     await renderSidebar();
   },
@@ -94,6 +94,8 @@ const sidebar = new Sidebar(sidebarRoot, {
 
 async function bootstrap(): Promise<void> {
   console.log("[main] bootstrap:start");
+
+  editor.init();
 
   const projects = await manager.loadLibrary();
 
@@ -108,11 +110,11 @@ async function bootstrap(): Promise<void> {
   }
 
   await renderSidebar();
+  await editor.refreshFromSelection();
 
-  const selected = await manager.getSelectedDocument();
-  editorInput.value = selected?.content ?? "";
-
-  console.log("[main] bootstrap:done");
+  console.log("[main] bootstrap:done", {
+    projectCount: projects.length,
+  });
 }
 
 async function renderSidebar(): Promise<void> {
@@ -132,12 +134,5 @@ async function renderSidebar(): Promise<void> {
     activeNodeId: state.activeNodeId,
   });
 }
-
-editorInput.addEventListener("input", async () => {
-  const state = manager.getState();
-  if (!state.activeDocumentId) return;
-
-  await manager.saveSelectedDocument(editorInput.value);
-});
 
 void bootstrap();
