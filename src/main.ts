@@ -31,6 +31,7 @@ const sidebar = new Sidebar(sidebarRoot, {
   onSelectDocument: async (nodeId) => {
     console.log("[main] sidebar:onSelectDocument", { nodeId });
 
+    await editor.flushPendingSave();
     await manager.selectDocument(nodeId);
     await editor.refreshFromSelection();
 
@@ -40,6 +41,7 @@ const sidebar = new Sidebar(sidebarRoot, {
   onSelectFolder: async (folderId) => {
     console.log("[main] sidebar:onSelectFolder", { folderId });
 
+    await editor.flushPendingSave();
     await manager.selectFolder(folderId);
     await editor.refreshFromSelection();
 
@@ -48,6 +50,8 @@ const sidebar = new Sidebar(sidebarRoot, {
 
   onAddToFolder: async (folderId, kind) => {
     console.log("[main] sidebar:onAddToFolder", { folderId, kind });
+
+    await editor.flushPendingSave();
 
     if (kind === "folder") {
       const folder = await manager.createFolder(folderId, "New Folder");
@@ -85,6 +89,7 @@ const sidebar = new Sidebar(sidebarRoot, {
 
     if (!confirmed) return;
 
+    await editor.flushPendingSave();
     await manager.deleteNode(nodeId);
     await editor.refreshFromSelection();
 
@@ -109,8 +114,13 @@ async function bootstrap(): Promise<void> {
     await manager.createDocument(loaded.project.rootNodeId, "Untitled");
   }
 
+  const restored = await editor.restoreLastSession();
+
+  if (!restored) {
+    await editor.refreshFromSelection();
+  }
+
   await renderSidebar();
-  await editor.refreshFromSelection();
 
   console.log("[main] bootstrap:done", {
     projectCount: projects.length,
