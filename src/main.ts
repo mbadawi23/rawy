@@ -1,10 +1,9 @@
-// src/main.ts
-
 import { IndexedDbLibraryStore } from "./stores/indexedDbLibraryStore";
 import { LibraryManager } from "./libraryManager";
 import { Sidebar } from "./sidebar";
 import { Editor } from "./editor";
 
+// Build the base app shell in the DOM.
 const app = document.getElementById("app");
 
 if (!app) {
@@ -23,10 +22,16 @@ const editorInput = document.getElementById(
   "editor-input",
 ) as HTMLTextAreaElement;
 
+// Core application services.
+// - store: persistence
+// - manager: library/project/document state
+// - editor: textarea behavior and autosave
 const store = new IndexedDbLibraryStore();
 const manager = new LibraryManager(store);
 const editor = new Editor(editorInput, manager);
 
+// Sidebar drives navigation and document/folder actions.
+// main.ts acts as the orchestration layer between Sidebar, Manager, and Editor.
 const sidebar = new Sidebar(sidebarRoot, {
   onSelectDocument: async (nodeId) => {
     console.log("[main] sidebar:onSelectDocument", { nodeId });
@@ -97,6 +102,12 @@ const sidebar = new Sidebar(sidebarRoot, {
   },
 });
 
+// App startup flow:
+// 1. initialize editor listeners
+// 2. load library state
+// 3. create a default project/document for first run
+// 4. restore last session if possible
+// 5. render sidebar + editor
 async function bootstrap(): Promise<void> {
   console.log("[main] bootstrap:start");
 
@@ -127,6 +138,7 @@ async function bootstrap(): Promise<void> {
   });
 }
 
+// Re-render sidebar from the currently active project state.
 async function renderSidebar(): Promise<void> {
   const state = manager.getState();
 
