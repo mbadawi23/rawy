@@ -1,6 +1,4 @@
-// src/sidebar.ts
-
-import type { ID, ProjectNode, Document } from "./schema";
+import type { ID, ProjectNode, Document, FolderNode } from "./schema";
 import type { LoadedProject } from "./libraryManager";
 
 /**
@@ -32,9 +30,9 @@ export interface SidebarCallbacks {
  * Responsibilities:
  * - Render the project tree
  * - Manage the inline "+" creation menu
- * - Emit UI events via callbacks
+ * - Expose semantic navigation commands
  *
- * It does NOT manage any project state itself.
+ * It does NOT manage persisted project state itself.
  */
 export class Sidebar {
   /**
@@ -53,11 +51,13 @@ export class Sidebar {
    * when only UI state changes (like opening the add menu).
    */
   private lastRenderData: SidebarRenderData | null = null;
+  private eventsBound = false;
 
   /**
-   * Root-level delegated listeners only need to be attached once.
+   * UI-only collapsed folder state for v1 keyboard navigation.
+   * This does not persist yet.
    */
-  private eventsBound = false;
+  private collapsedFolderIds = new Set<ID>();
 
   constructor(
     private readonly root: HTMLElement,
@@ -67,26 +67,102 @@ export class Sidebar {
     this.root.tabIndex = 0;
   }
 
-  /**
-   * Public entrypoint for inline rename mode.
-   *
-   * Used after creating a new doc/folder so the user can
-   * immediately overwrite the default title.
-   */
+  // ------------------------------------------------------------
+  // Public API
+  // ------------------------------------------------------------
+
+  focus(): void {
+    this.root.focus();
+  }
+
   startRename(nodeId: ID): void {
     this.editingNodeId = nodeId;
     this.rerender();
   }
 
-  /**
-   * Main render entrypoint.
-   *
-   * Rebuilds the entire sidebar HTML from the current tree state.
-   */
+  moveUp(): void {
+    this.moveSelection(-1);
+  }
+
+  moveDown(): void {
+    this.moveSelection(1);
+  }
+
+  expandNode(): void {
+    const node = this.getActiveNode();
+    if (!node || node.kind !== "folder") {
+      return;
+    }
+
+    if (this.collapsedFolderIds.has(node.id)) {
+      this.collapsedFolderIds.delete(node.id);
+      this.rerender();
+      return;
+    }
+
+    this.callbacks.onSelectFolder(node.id);
+  }
+
+  collapseNode(): void {
+    const node = this.getActiveNode();
+    if (!node) return;
+
+    if (node.kind === "folder" && !this.collapsedFolderIds.has(node.id)) {
+      const hasChildren = this.lastRenderData?.nodes.some(
+        (child) => child.parentId === node.id,
+      );
+
+      if (hasChildren) {
+        this.collapsedFolderIds.add(node.id);
+        this.rerender();
+        return;
+      }
+    }
+
+    if (node.parentId) {
+      this.callbacks.onSelectFolder(node.parentId);
+    }
+  }
+
+  confirm(): void {
+    const node = this.getActiveNode();
+    if (!node) return;
+
+    this.selectNodeByKind(node);
+  }
+
+  rename(): void {
+    const node = this.getActiveNode();
+    if (!node) return;
+
+    this.startRename(node.id);
+  }
+
+  newDocument(): void {
+    const folderId = this.getActionFolderId();
+    if (!folderId) return;
+
+    this.callbacks.onAddToFolder(folderId, "doc");
+  }
+
+  newFolder(): void {
+    const folderId = this.getActionFolderId();
+    if (!folderId) return;
+
+    this.callbacks.onAddToFolder(folderId, "folder");
+  }
+
   render(data: SidebarRenderData): void {
     this.lastRenderData = data;
 
-    // Determine which folder should show the "+" action
+    // Seed local collapsed state from data once for any folders that
+    // may already carry an isCollapsed value in storage.
+    for (const node of data.nodes) {
+      if (node.kind === "folder" && node.isCollapsed) {
+        this.collapsedFolderIds.add(node.id);
+      }
+    }
+
     const actionFolderId = getActionFolderId(
       data.nodes,
       data.project.rootNodeId,
@@ -103,9 +179,9 @@ export class Sidebar {
       actionFolderId,
       this.addMenuFolderId,
       this.editingNodeId,
+      this.collapsedFolderIds,
     );
 
-    // Root-level add button
     const headerAddButton = showHeaderAddButton
       ? renderAddControl(
           data.project.rootNodeId,
@@ -133,22 +209,41 @@ export class Sidebar {
     if (this.editingNodeId) {
       this.focusRenameInput();
     } else {
-      this.focusSidebarRoot();
+      this.focus();
     }
   }
 
-  /**
-   * Lightweight re-render used when only UI state changes.
-   * (example: opening or closing the add menu)
-   */
+  // ------------------------------------------------------------
+  // Internal UI helpers
+  // ------------------------------------------------------------
+
   private rerender(): void {
     if (!this.lastRenderData) return;
     this.render(this.lastRenderData);
   }
 
-  /**
-   * Focus the active rename input, if present.
-   */
+  private getActiveNode(): ProjectNode | null {
+    if (!this.lastRenderData?.activeNodeId) {
+      return null;
+    }
+
+    return (
+      this.lastRenderData.nodes.find(
+        (node) => node.id === this.lastRenderData?.activeNodeId,
+      ) ?? null
+    );
+  }
+
+  private getActionFolderId(): ID | null {
+    if (!this.lastRenderData) return null;
+
+    return getActionFolderId(
+      this.lastRenderData.nodes,
+      this.lastRenderData.project.rootNodeId,
+      this.lastRenderData.activeNodeId,
+    );
+  }
+
   private focusRenameInput(): void {
     if (!this.editingNodeId) return;
 
@@ -160,13 +255,6 @@ export class Sidebar {
 
     input.focus();
     input.select();
-  }
-
-  /**
-   * Keep keyboard navigation attached to the sidebar root.
-   */
-  private focusSidebarRoot(): void {
-    this.root.focus();
   }
 
   /**
@@ -210,19 +298,36 @@ export class Sidebar {
 
     this.root.addEventListener("click", this.handleRootClick);
     this.root.addEventListener("dblclick", this.handleRootDoubleClick);
-    this.root.addEventListener("keydown", this.handleRootKeyDown);
   }
 
   /**
    * Handle all click interactions through event delegation.
    */
   private handleRootClick = (event: MouseEvent): void => {
+    this.root.focus();
+
     const target = event.target as HTMLElement | null;
     if (!target) return;
 
-    // ------------------------------------------------------------
-    // Delete node
-    // ------------------------------------------------------------
+    const collapseToggle = target.closest<HTMLElement>(
+      "[data-toggle-folder-id]",
+    );
+    if (collapseToggle) {
+      event.stopPropagation();
+
+      const folderId = collapseToggle.dataset.toggleFolderId;
+      if (!folderId) return;
+
+      if (this.collapsedFolderIds.has(folderId)) {
+        this.collapsedFolderIds.delete(folderId);
+      } else {
+        this.collapsedFolderIds.add(folderId);
+      }
+
+      this.rerender();
+      return;
+    }
+
     const deleteButton = target.closest<HTMLElement>("[data-delete-node-id]");
     if (deleteButton) {
       event.stopPropagation();
@@ -351,43 +456,6 @@ export class Sidebar {
   };
 
   /**
-   * Handle sidebar keyboard navigation.
-   *
-   * Supported for now:
-   * - ArrowUp / ArrowDown -> move selection through visible nodes
-   * - Enter -> activate selected node
-   *
-   * We intentionally ignore key handling while the inline rename input
-   * is focused so typing/editing remains natural.
-   */
-  private handleRootKeyDown = (event: KeyboardEvent): void => {
-    const target = event.target as HTMLElement | null;
-    if (!target) return;
-
-    // Do not hijack keys while editing a rename field.
-    if (target.matches("[data-rename-input-node-id]")) {
-      return;
-    }
-
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      this.moveSelection(-1);
-      return;
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      this.moveSelection(1);
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      this.activateSelectedNode();
-    }
-  };
-
-  /**
    * Move selection up or down through the currently visible nodes.
    */
   private moveSelection(delta: -1 | 1): void {
@@ -396,6 +464,7 @@ export class Sidebar {
     const visibleNodes = getVisibleNodes(
       this.lastRenderData.nodes,
       this.lastRenderData.project.rootNodeId,
+      this.collapsedFolderIds,
     );
 
     if (visibleNodes.length === 0) return;
@@ -415,30 +484,11 @@ export class Sidebar {
     }
 
     const nextIndex = clamp(currentIndex + delta, 0, visibleNodes.length - 1);
-
     const nextNode = visibleNodes[nextIndex];
+
     if (!nextNode) return;
 
     this.selectNodeByKind(nextNode);
-  }
-
-  /**
-   * Activate the currently selected node.
-   *
-   * For now, activation simply routes through the same selection callbacks.
-   * This keeps keyboard behavior aligned with click behavior.
-   */
-  private activateSelectedNode(): void {
-    if (!this.lastRenderData) return;
-    if (!this.lastRenderData.activeNodeId) return;
-
-    const node = this.lastRenderData.nodes.find(
-      (item) => item.id === this.lastRenderData?.activeNodeId,
-    );
-
-    if (!node) return;
-
-    this.selectNodeByKind(node);
   }
 
   /**
@@ -504,6 +554,7 @@ function renderTree(
   actionFolderId: ID | null,
   addMenuFolderId: ID | null,
   editingNodeId: ID | null,
+  collapsedFolderIds: Set<ID>,
 ): string {
   const children = nodes
     .filter((node) => node.parentId === folderId)
@@ -521,6 +572,8 @@ function renderTree(
         const isActionFolder = node.id === actionFolderId;
         const isMenuOpen = node.id === addMenuFolderId;
         const activeClass = node.id === activeNodeId ? "is-active" : "";
+        const isCollapsed = collapsedFolderIds.has(node.id);
+        const hasChildren = nodes.some((child) => child.parentId === node.id);
 
         const addControl = isActionFolder
           ? renderAddControl(node.id, node.title, isMenuOpen)
@@ -530,6 +583,20 @@ function renderTree(
           node.id === activeNodeId
             ? renderDeleteButton(node.id, "folder", node.title)
             : "";
+
+        const toggleControl = hasChildren
+          ? `
+            <button
+              class="sidebar-folder-toggle"
+              type="button"
+              data-toggle-folder-id="${node.id}"
+              aria-label="${isCollapsed ? "Expand" : "Collapse"} ${escapeHtml(node.title)}"
+              title="${isCollapsed ? "Expand" : "Collapse"}"
+            >
+              ${isCollapsed ? "▸" : "▾"}
+            </button>
+          `
+          : `<span class="sidebar-folder-toggle spacer"></span>`;
 
         const folderLabel = isEditing
           ? renderRenameInput(node.id, node.title, "folder")
@@ -543,10 +610,27 @@ function renderTree(
               </button>
             `;
 
+        const childrenHtml = isCollapsed
+          ? ""
+          : `
+            <ul class="sidebar-children" data-depth-children="true">
+              ${renderTree(
+                nodes,
+                node.id,
+                activeNodeId,
+                actionFolderId,
+                addMenuFolderId,
+                editingNodeId,
+                collapsedFolderIds,
+              )}
+            </ul>
+          `;
+
         return `
           <li class="sidebar-node sidebar-node-folder">
             <div class="sidebar-node-row">
               <div class="sidebar-node-main">
+                ${toggleControl}
                 ${folderLabel}
               </div>
 
@@ -556,16 +640,7 @@ function renderTree(
               </div>
             </div>
 
-            <ul class="sidebar-children">
-              ${renderTree(
-                nodes,
-                node.id,
-                activeNodeId,
-                actionFolderId,
-                addMenuFolderId,
-                editingNodeId,
-              )}
-            </ul>
+            ${childrenHtml}
           </li>
         `;
       }
@@ -593,6 +668,7 @@ function renderTree(
         <li class="sidebar-node sidebar-node-doc">
           <div class="sidebar-node-row">
             <div class="sidebar-node-main">
+              <span class="sidebar-folder-toggle spacer"></span>
               ${docLabel}
             </div>
 
@@ -762,7 +838,11 @@ function getActionFolderId(
  * Later, if folder collapse is implemented, this helper is where
  * collapsed branches should be skipped.
  */
-function getVisibleNodes(nodes: ProjectNode[], rootNodeId: ID): ProjectNode[] {
+function getVisibleNodes(
+  nodes: ProjectNode[],
+  rootNodeId: ID,
+  collapsedFolderIds: Set<ID>,
+): ProjectNode[] {
   const childrenByParentId = new Map<ID, ProjectNode[]>();
 
   for (const node of nodes) {
@@ -785,7 +865,7 @@ function getVisibleNodes(nodes: ProjectNode[], rootNodeId: ID): ProjectNode[] {
     for (const child of children) {
       result.push(child);
 
-      if (child.kind === "folder") {
+      if (child.kind === "folder" && !collapsedFolderIds.has(child.id)) {
         visit(child.id);
       }
     }

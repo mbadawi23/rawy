@@ -2,6 +2,7 @@ import { IndexedDbLibraryStore } from "./stores/indexedDbLibraryStore";
 import { LibraryManager } from "./libraryManager";
 import { Sidebar } from "./sidebar";
 import { Editor } from "./editor";
+import { ShortcutManager } from "./shortcuts";
 
 // Build the base app shell in the DOM.
 const app = document.getElementById("app");
@@ -29,6 +30,51 @@ const editorInput = document.getElementById(
 const store = new IndexedDbLibraryStore();
 const manager = new LibraryManager(store);
 const editor = new Editor(editorInput, manager);
+
+// Keyboard shortcut abstraction layer.
+// v1 goal:
+// - sidebar navigation commands
+// - editor focus mode toggle
+// Later this can load user-customized keymaps from storage.
+const shortcuts = new ShortcutManager();
+
+shortcuts.registerScope({
+  name: "sidebar",
+  getElement: () => sidebarRoot,
+  commands: {
+    moveUp: () => sidebar.moveUp(),
+    moveDown: () => sidebar.moveDown(),
+    expandNode: () => sidebar.expandNode(),
+    collapseNode: () => sidebar.collapseNode(),
+    confirm: () => sidebar.confirm(),
+    rename: () => sidebar.rename(),
+    newDocument: () => sidebar.newDocument(),
+    newFolder: () => sidebar.newFolder(),
+  },
+  bindings: {
+    moveUp: "ArrowUp",
+    moveDown: "ArrowDown",
+    expandNode: "ArrowRight",
+    collapseNode: "ArrowLeft",
+    confirm: "Enter",
+    rename: "F2",
+    newDocument: ["Ctrl+N", "Meta+N"],
+    newFolder: ["Ctrl+Shift+N", "Meta+Shift+N"],
+  },
+});
+
+shortcuts.registerScope({
+  name: "editor",
+  getElement: () => editor.getElement(),
+  commands: {
+    toggleFocusMode: () => editor.toggleFocusMode(),
+    exitFocusMode: () => editor.exitFocusMode(),
+  },
+  bindings: {
+    toggleFocusMode: "F9",
+    exitFocusMode: "Escape",
+  },
+});
 
 // Sidebar drives navigation and document/folder actions.
 // main.ts acts as the orchestration layer between Sidebar, Manager, and Editor.
@@ -112,6 +158,7 @@ async function bootstrap(): Promise<void> {
   console.log("[main] bootstrap:start");
 
   editor.init();
+  shortcuts.init();
 
   const projects = await manager.loadLibrary();
 

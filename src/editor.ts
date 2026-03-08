@@ -21,6 +21,7 @@ export class Editor {
   // pendingSavePromise lets callers wait for an in-flight save to finish.
   private saveTimer: number | null = null;
   private pendingSavePromise: Promise<void> | null = null;
+  private isFocusMode = false;
 
   constructor(
     private readonly input: HTMLTextAreaElement,
@@ -97,6 +98,22 @@ export class Editor {
     if (!this.input.disabled) {
       this.input.focus();
     }
+  }
+
+  getElement(): HTMLTextAreaElement {
+    return this.input;
+  }
+
+  toggleFocusMode(): void {
+    this.isFocusMode = !this.isFocusMode;
+    document.body.classList.toggle("rawy-focus-mode", this.isFocusMode);
+  }
+
+  exitFocusMode(): void {
+    if (!this.isFocusMode) return;
+
+    this.isFocusMode = false;
+    document.body.classList.remove("rawy-focus-mode");
   }
 
   // Force any pending debounced save to complete before navigation.
@@ -184,7 +201,6 @@ export class Editor {
       const content = this.input.value;
       const documentId = latestState.activeDocumentId;
 
-      this.pendingDocumentId = documentId;
       this.pendingSavePromise = this.manager
         .saveSelectedDocument(content)
         .then(() => {
@@ -192,7 +208,6 @@ export class Editor {
         })
         .finally(() => {
           this.pendingSavePromise = null;
-          this.pendingDocumentId = null;
         });
 
       this.saveTimer = null;
@@ -239,6 +254,7 @@ export class Editor {
   private saveCursorPosition(documentId: string, position: number): void {
     const map = this.readCursorMap();
     map[documentId] = position;
+
     window.localStorage.setItem(
       STORAGE_KEYS.cursorByDocumentId,
       JSON.stringify(map),
